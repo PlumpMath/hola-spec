@@ -233,16 +233,17 @@ b
                (s/optional-key :phone) s/String})
 
 ;; Specs assign meaning to individual attributes, then collect them into
-;; maps using set semantics (on the keys).
-
-;; This approach allows us to start assigning (and sharing) semantics
-;; at the attribute level across our libraries and applications!!!
+;; maps using set semantics (on the keys). This approach allows us to start
+;; assigning (and sharing) semantics at the attribute level across our
+;; libraries and applications.
 
 ;; clojure.spec
 (s/def ::first-name string?)
 (s/def ::last-name string?)
 (s/def ::email (s/and string? #(re-matches #"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,63}" %)))
 (s/def ::phone string?)
+
+;; Entity maps in spec are defined with keys
 
 (s/def ::person
   (s/keys :req [::first-name
@@ -253,32 +254,172 @@ b
 ;; This registers a ::person spec with the required keys ::first-name, ::last-name, and ::email, with optional key ::phone.
 ;; The map spec never specifies the value spec for the attributes, only what attributes are required or optional.
 
-;; Why is first-name a keyword????
-(type ::first-name)
+
+;; What is a spec object?
+(s/spec? ::first-name)
+;;=> false
+;; I would expect that to be true...
+;; because previously I have used s/def to bind ::first-name to a spec, and
+;; I expect s/def to work as def, but it doesn´t.
+
+(class ::first-name)
+;;=> clojure.lang.Keyword
+
+(s/spec? ::person)
+;;=> false
+
+(s/spec? (s/spec (s/cat :even even? :string string?)))
+;;=> #object[clojure.spec$regex_spec_impl$reify__11725 0x7416e071 "clojure.spec$regex_spec_impl$reify__11725@7416e071"]
+
+(s/spec? (s/keys :req [::first-name
+                       ::last-name
+                       ::email]
+                 :opt [::phone]))
+;;=> #object[clojure.spec$map_spec_impl$reify__11497 0x294ad81a "clojure.spec$map_spec_impl$reify__11497@294ad81a"]
 
 
+;; s/def doesn´t work as def****************************************************************
+;; def locates a global var with the name of a symbol
+
+(def a {})
+;;=> #'hola-spec.core/a
+
+;; var is a reference type
+;; If we want the reference to a var, we use (var a) or the reader sugar #'a
+(var a)
+;;=> #'hola-spec.core/a
+
+;;Evaluating a symbol normally results in looking for a var with that name and dereference it.
+;; So if we evaluate a:
+a
+;;=> {}
+;; We get the object a is referring to
+;; evaluating a is the same as (deref (var a)) or the reader sugar @#'a
+
+;; That´s why when we ask for the class of a, we get the class of the object a is referring to
+;; in this case, a clojure.lang.PersistentArrayMap
+(class a)
+;;=> clojure.lang.PersistentArrayMap
+
+;; On the other hand, s/def just makes a entry in a registry,
+;; thus mapping the keyword to the spec.
+;; the registry is an (atom {})
+;; That´s why, even when a keyword is mapped to a spec using s/def,
+;; it is still evaluated as a keyword.
+;;******************************************************************************************
+
+;; When conformance is checked on a map, it combines two things:
+;; 1- checking that the required attributes are included,
+;; 2- and checking that every registered key has a conforming value.
+
+(s/conform ::person {::first-name "Espe" ::last-name "Moreno"})
+;;=> :clojure.spec/invalid
+
+(s/explain-str ::person {::first-name "Espe" ::last-name "Moreno"})
+;;=> "val: {:hola-spec.core/first-name \"Espe\", :hola-spec.core/last-name \"Moreno\"}
+;; fails predicate: [(contains? % :hola-spec.core/email)]\r\n"
+
+(s/conform ::person {::first-name "Espe" ::last-name "Moreno" ::email 123})
+;;=> :clojure.spec/invalid
+
+(s/explain-str ::person {::first-name "Espe" ::last-name "Moreno" ::email 123})
+;;=> "In: [:hola-spec.core/email] val: 123 fails spec: :hola-spec.core/email at: [:hola-spec.core/email] predicate: string?\r\n"
+
+(s/conform ::person {::first-name "Espe" ::last-name "Moreno" ::email "1@2.com"})
+;;=> {:hola-spec.core/first-name "Espe",
+;;    :hola-spec.core/last-name "Moreno",
+;;    :hola-spec.core/email "1@2.com"}
+
+
+;; Also note that ALL attributes are checked via keys, not just those listed in the :req and :opt keys.
+;; Thus a bare (s/keys) is valid and will check all attributes of a map without checking which keys are required or optional.
 
 (s/def ::any-map (s/keys))
+;;=> :hola-spec.core/any-map
+
 (s/conform ::any-map {:a 1 :b 2})
+;;=> {:a 1, :b 2}
+
 (s/valid? ::any-map {:a 1 :b 2})
+;;=> true
+;; It´s going to be true for any clojure-valid map.
+
+(s/describe ::any-map)
+;;=> (keys)
+
+
+;; keys can also specify :req-un and :opt-un for required and optional unqualified keys.
 
 
 
 
+;; ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;; EXAMPLE from http://swannodette.github.io/2016/06/03/tools-for-thought
+;; ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
+;; We are going to define "let". We know, let has some parts:
+;; a name, a vector of bindings and some forms. We can start with
+(s/def ::let
+  (s/cat
+     :name     '#{let}
+     :bindings ::bindings
+     :forms    (s/* (constantly true)))) ;;zero or more forms after the bindings
+
+(s/def ::bindings vector?)
+;;=> :hola-spec.core/bindings
+
+(s/conform ::let '(let [x 1] (+ x y)))
+;;=> {:name let, :bindings [x 1], :forms [(+ x y)]}
+
+;;We could have just said: (without defining ::bindigs as a separate spec.)
+(s/def ::let2
+  (s/cat
+     :name     '#{let2}
+     :bindings vector?
+     :forms    (s/* (constantly true))))
+
+(s/conform ::let2 '(let2 [x 1] (+ x y)))
+;;=> {:name let2, :bindings [x 1], :forms [(+ x y)]}
+
+;; But ::bindings is going to need to be a little more complex. It´s good
+;; to specify it separately
+(s/conform ::let '(let [x 1 y] (+ x y)))
+;;=> {:name let, :bindings [x 1 y], :forms [(+ x y)]}
+;;=> This is not correct, we have to redifine ::bindings
+
+(s/def ::bindings
+  (s/and vector? #(even? (count %)))) ;;using thread first macro #(-> % count even?)
+
+(s/conform ::let '(let [x 1 y] (+ x y)))
+;;=> :clojure.spec/invalid
+
+(s/conform ::let '(let [1 y] (+ x y)))
+;;=> {:name let, :bindings [1 y], :forms [(+ x y)]}
+
+;;Let's make a ::binding spec to control what can appear in the vector:
+(s/def ::binding
+  (s/cat
+    :name  symbol?
+    :value (constantly true)))
+
+;; We add another predicate to ::bindings
+(s/def ::bindings
+  (s/and vector?                ;; It has to be a vector
+         #(-> % count even?)    ;; The vector has to have an even number of elements
+         (s/* ::binding)))      ;; It has to fulfill the ::binding spec, that is, the first
+                                ;; element is a symbol, and the second is a constantly true value.
+
+(s/conform ::let '(let [1 y] (+ x y)))
+;;=> :clojure.spec/invalid
+
+(s/conform ::let '(let [a 1] (+ x y)))
+;;=> {:name let, :bindings [{:name a, :value 1}], :forms [(+ x y)]}
 
 
-
-
-
-
-
-
-
-
-
-
+;; +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;; EXAMPLE from http://gigasquidsoftware.com/blog/2016/05/29/one-fish-spec-fish/
+;; +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 (def fish-numbers {0 "Zero"
                    1 "One"
@@ -286,5 +427,86 @@ b
 
 (s/def ::fish-number (set (keys fish-numbers)))
 
-;; With (set (keys fish-numbers)) what I get is #{0 1 2}
-;; We can use a set as a predicate
+;; Is the same as to use #{0 1 2} (a set) as a predicate
+
+(s/def ::color #{"Red" "Blue" "Dun"})
+
+;; Specifying the sequences of the values
+
+(s/def ::first-line (s/cat :n1 ::fish-number :n2 ::fish-number :c1 ::color :c2 ::color))
+
+;; What the spec is doing here is associating each part with a tag, to identify what was
+;; matched or not, and its predicate/pattern. So, if we try to explain a failing spec,
+;; it will tell us where it went wrong.
+
+;; We need to add a spec to check whether the second number is one bigger than the first number.
+;; For that we create a function that is goint to take as input the map of
+;; the destructured tag keys from the ::first-line
+
+(s/conform ::first-line [1 2 "Red" "Blue"])
+;;=> {:n1 1, :n2 2, :c1 "Red", :c2 "Blue"}
+
+;; (one-bigger? {:n1 1, :n2 2, :c1 "Red", :c2 "Blue"})
+
+(defn one-bigger? [{:keys [n1 n2]}]
+  (= n2 (inc n1)))
+
+;; Also the colors should be not the same value. We redefine ::first-line:
+
+(s/def ::first-line (s/and (s/cat :n1 ::fish-number :n2 ::fish-number :c1 ::color :c2 ::color)
+                           one-bigger?
+                           #(not= (:c1 %) (:c2 %))))
+
+(s/valid? ::first-line [1 2 "Red" "Blue"])
+;;=> true
+
+
+
+
+
+
+
+
+
+(s/def ::binding
+  (s/cat
+    :name  symbol?
+    :value (constantly true)))
+
+(s/def ::bindings
+  (s/and vector?
+         #(-> % count even?)
+         (s/* ::binding)))
+
+(s/def ::let
+  (s/cat
+     :name     '#{let}
+     :bindings ::bindings
+     :forms    (s/* (constantly true))))
+
+(s/conform ::let '(let [a 1] (+ x y)))
+
+{:name let, :bindings [{:name a, :value 1}], :forms [(+ x y)]}
+
+
+
+
+(s/def ::fish-number (set (keys fish-numbers)))
+
+(s/def ::color #{"Red" "Blue" "Dun"})
+
+(s/def ::first-line (s/and (s/cat :n1 ::fish-number
+                                  :n2 ::fish-number
+                                  :c1 ::color
+                                  :c2 ::color)
+                           one-bigger?
+                           #(not= (:c1 %) (:c2 %))))
+
+(s/conform ::first-line [1 2 "Red" "Blue"])
+
+{:n1 1, :n2 2, :c1 "Red", :c2 "Blue"}
+
+
+
+
+
