@@ -260,7 +260,7 @@ b
 ;;=> false
 ;; I would expect that to be true...
 ;; because previously I have used s/def to bind ::first-name to a spec, and
-;; I expect s/def to work as def, but it doesn´t.
+;; I expect s/def to work as def, but it doesnÂ´t.
 
 (class ::first-name)
 ;;=> clojure.lang.Keyword
@@ -278,7 +278,7 @@ b
 ;;=> #object[clojure.spec$map_spec_impl$reify__11497 0x294ad81a "clojure.spec$map_spec_impl$reify__11497@294ad81a"]
 
 
-;; s/def doesn´t work as def****************************************************************
+;; s/def doesnÂ´t work as def****************************************************************
 ;; def locates a global var with the name of a symbol
 
 (def a {})
@@ -296,7 +296,7 @@ a
 ;; We get the object a is referring to
 ;; evaluating a is the same as (deref (var a)) or the reader sugar @#'a
 
-;; That´s why when we ask for the class of a, we get the class of the object a is referring to
+;; ThatÂ´s why when we ask for the class of a, we get the class of the object a is referring to
 ;; in this case, a clojure.lang.PersistentArrayMap
 (class a)
 ;;=> clojure.lang.PersistentArrayMap
@@ -304,7 +304,7 @@ a
 ;; On the other hand, s/def just makes a entry in a registry,
 ;; thus mapping the keyword to the spec.
 ;; the registry is an (atom {})
-;; That´s why, even when a keyword is mapped to a spec using s/def,
+;; ThatÂ´s why, even when a keyword is mapped to a spec using s/def,
 ;; it is still evaluated as a keyword.
 ;;******************************************************************************************
 
@@ -322,7 +322,7 @@ a
 (s/conform ::person {::first-name "Espe" ::last-name "Moreno" ::email 123})
 ;;=> :clojure.spec/invalid
 
-(s/explain-str ::person {::first-name "Espe" ::last-name "Moreno" ::email 123})
+(s/explain ::person {::first-name "Espe" ::last-name "Moreno" ::email 123})
 ;;=> "In: [:hola-spec.core/email] val: 123 fails spec: :hola-spec.core/email at: [:hola-spec.core/email] predicate: string?\r\n"
 
 (s/conform ::person {::first-name "Espe" ::last-name "Moreno" ::email "1@2.com"})
@@ -342,7 +342,7 @@ a
 
 (s/valid? ::any-map {:a 1 :b 2})
 ;;=> true
-;; It´s going to be true for any clojure-valid map.
+;; ItÂ´s going to be true for any clojure-valid map.
 
 (s/describe ::any-map)
 ;;=> (keys)
@@ -382,7 +382,7 @@ a
 (s/conform ::let2 '(let2 [x 1] (+ x y)))
 ;;=> {:name let2, :bindings [x 1], :forms [(+ x y)]}
 
-;; But ::bindings is going to need to be a little more complex. It´s good
+;; But ::bindings is going to need to be a little more complex. ItÂ´s good
 ;; to specify it separately
 (s/conform ::let '(let [x 1 y] (+ x y)))
 ;;=> {:name let, :bindings [x 1 y], :forms [(+ x y)]}
@@ -433,14 +433,18 @@ a
 
 ;; Specifying the sequences of the values
 
-(s/def ::first-line (s/cat :n1 ::fish-number :n2 ::fish-number :c1 ::color :c2 ::color))
+(s/def ::first-line
+  (s/cat :n1 ::fish-number
+         :n2 ::fish-number
+         :c1 ::color
+         :c2 ::color))
 
 ;; What the spec is doing here is associating each part with a tag, to identify what was
 ;; matched or not, and its predicate/pattern. So, if we try to explain a failing spec,
 ;; it will tell us where it went wrong.
 
-;; We need to add a spec to check whether the second number is one bigger than the first number.
-;; For that we create a function that is goint to take as input the map of
+;; We need to add a spec to check whether the second number is one bigger than the first
+;; number. For that we create a function that is goint to take as input the map of
 ;; the destructured tag keys from the ::first-line
 
 (s/conform ::first-line [1 2 "Red" "Blue"])
@@ -453,48 +457,6 @@ a
 
 ;; Also the colors should be not the same value. We redefine ::first-line:
 
-(s/def ::first-line (s/and (s/cat :n1 ::fish-number :n2 ::fish-number :c1 ::color :c2 ::color)
-                           one-bigger?
-                           #(not= (:c1 %) (:c2 %))))
-
-(s/valid? ::first-line [1 2 "Red" "Blue"])
-;;=> true
-
-
-
-
-
-
-
-
-
-(s/def ::binding
-  (s/cat
-    :name  symbol?
-    :value (constantly true)))
-
-(s/def ::bindings
-  (s/and vector?
-         #(-> % count even?)
-         (s/* ::binding)))
-
-(s/def ::let
-  (s/cat
-     :name     '#{let}
-     :bindings ::bindings
-     :forms    (s/* (constantly true))))
-
-(s/conform ::let '(let [a 1] (+ x y)))
-
-{:name let, :bindings [{:name a, :value 1}], :forms [(+ x y)]}
-
-
-
-
-(s/def ::fish-number (set (keys fish-numbers)))
-
-(s/def ::color #{"Red" "Blue" "Dun"})
-
 (s/def ::first-line (s/and (s/cat :n1 ::fish-number
                                   :n2 ::fish-number
                                   :c1 ::color
@@ -502,11 +464,87 @@ a
                            one-bigger?
                            #(not= (:c1 %) (:c2 %))))
 
-(s/conform ::first-line [1 2 "Red" "Blue"])
+(s/valid? ::first-line [1 2 "Red" "Blue"])
+;;=> true
 
-{:n1 1, :n2 2, :c1 "Red", :c2 "Blue"}
+;; Question? How do I lnow that {:n1 1, :n2 2, :c1 "Red", :c2 "Blue"} is passed as
+;; an argument to one-bigger?
+
+;; From the s/and docs:
+;; Returns a spec that returns the conformed value. Successive
+;; conformed values propagate through rest of predicates."
+;; Thus, the result of this: 
+(s/conform (s/cat :n1 ::fish-number
+                  :n2 ::fish-number
+                  :c1 ::color
+                  :c2 ::color)[1 2 "Red" "Blue"])
+
+;; {:n1 1, :n2 2, :c1 "Red", :c2 "Blue"}
+;; Is what is passed to one-bigger?
+
+;; Generatin data!!!
+;; With s/exercise we can automatically generate compatible values with the spec
+;; 10 bay default (if we don't specify how many)
+;; returns a sequence of [val conformed-val] tuples
+
+(s/exercise ::first-line 5)
+;; ([(1 2 "Red" "Blue") {:n1 1, :n2 2, :c1 "Red", :c2 "Blue"}]
+;;  [(1 2 "Blue" "Dun") {:n1 1, :n2 2, :c1 "Blue", :c2 "Dun"}]
+;;  [(0 1 "Blue" "Red") {:n1 0, :n2 1, :c1 "Blue", :c2 "Red"}]
+;;  [(1 2 "Blue" "Red") {:n1 1, :n2 2, :c1 "Blue", :c2 "Red"}]
+;;  [(1 2 "Dun" "Blue") {:n1 1, :n2 2, :c1 "Dun", :c2 "Blue"}])
+
+;; We need to add an extra predicate so that numbers rhyme with colors
+
+(defn fish-number-rhymes-with-color? [{n :n2 c :c2}]
+  (or
+   (= [n c] [2 "Blue"])
+   (= [n c] [1 "Dun"])))
 
 
+(s/def ::first-line (s/and (s/cat :n1 ::fish-number
+                                  :n2 ::fish-number
+                                  :c1 ::color
+                                  :c2 ::color)
+                           one-bigger?
+                           #(not= (:c1 %) (:c2 %))
+                           fish-number-rhymes-with-color?))
+
+(s/exercise ::first-line 5)
+;;  ([(1 2 "Dun" "Blue") {:n1 1, :n2 2, :c1 "Dun", :c2 "Blue"}]
+;;   [(1 2 "Dun" "Blue") {:n1 1, :n2 2, :c1 "Dun", :c2 "Blue"}]
+;;   [(0 1 "Blue" "Dun") {:n1 0, :n2 1, :c1 "Blue", :c2 "Dun"}]
+;;   [(1 2 "Dun" "Blue") {:n1 1, :n2 2, :c1 "Dun", :c2 "Blue"}]
+;;   [(1 2 "Red" "Blue") {:n1 1, :n2 2, :c1 "Red", :c2 "Blue"}])
+
+(s/explain ::first-line '(0 1 "Dun" "Blue"))
+;; val: {:n1 0, :n2 1, :c1 "Dun", :c2 "Blue"}
+;; fails predicate: fish-number-rhymes-with-color?
+
+;; let’s finally create a function to create a string for our mini-poem from our data.
+;; While we’re at it, we can use our spec with s/fdef, to validate that the parameters
+;; are indeed in the form of ::first-line.
+
+(defn fish-line [n1 n2 c1 c2]
+  (clojure.string/join " "
+    (map #(str % " fish.")
+      [(get fish-numbers n1)
+       (get fish-numbers n2)
+       c1
+       c2])))
+
+;; We can specify that the args for this function be validated with ::first-line
+;; and the return value is a string.
+(s/fdef fish-line
+        :args ::first-line
+        :ret  string?)
+
+;; We turn on the instrumentation of the validation for functions
+(s/instrument #'fish-line)
+
+;; #'fish-line = (var fish-line)
+
+(fish-line 1 2 "Red" "Blue")
 
 
 
