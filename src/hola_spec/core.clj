@@ -251,8 +251,50 @@ b
                 ::email]
           :opt [::phone]))
 
-;; This registers a ::person spec with the required keys ::first-name, ::last-name, and ::email, with optional key ::phone.
-;; The map spec never specifies the value spec for the attributes, only what attributes are required or optional.
+;; This registers a ::person spec with the required keys ::first-name, ::last-name,
+;; and ::email, with optional key ::phone.
+;; The map spec never specifies the value spec for the attributes, only what attributes
+;; are required or optional.
+
+
+;; When conformance is checked on a map, it combines two things:
+;; 1- checking that the required attributes are included,
+
+(s/conform ::person {::first-name "Espe" ::last-name "Moreno"})
+;;=> :clojure.spec/invalid
+
+(s/explain ::person {::first-name "Espe" ::last-name "Moreno"})
+;;=> "val: {:hola-spec.core/first-name \"Espe\", :hola-spec.core/last-name \"Moreno\"}
+;; fails predicate: [(contains? % :hola-spec.core/email)]\r\n"
+
+;; 2- and checking that every registered key has a conforming value.
+
+(s/conform ::person {::first-name "Espe" ::last-name "Moreno" ::email 123})
+;;=> :clojure.spec/invalid
+
+(s/explain ::person {::first-name "Espe" ::last-name "Moreno" ::email 123})
+;;=> "In: [:hola-spec.core/email] val: 123 fails spec: :hola-spec.core/email at: [:hola-spec.core/email] predicate: string?\r\n"
+
+(s/conform ::person {::first-name "Espe" ::last-name "Moreno" ::email "1@2.com"})
+;;=> {:hola-spec.core/first-name "Espe",
+;;    :hola-spec.core/last-name "Moreno",
+;;    :hola-spec.core/email "1@2.com"}
+
+;; Because we have assigned meaning to individual attributes, we can define another map
+;; spec using the same attributes in a different way
+
+(s/def ::another-person
+  (s/keys :req [::first-name
+                ::phone]
+          :opt [::last-name]))
+
+(s/conform ::another-person {::first-name "espe" ::phone "123"})
+
+
+
+;; *************************************************************
+;;                            (Aside)
+;; *************************************************************
 
 
 ;; What is a spec object?
@@ -271,14 +313,24 @@ b
 (s/spec? (s/spec (s/cat :even even? :string string?)))
 ;;=> #object[clojure.spec$regex_spec_impl$reify__11725 0x7416e071 "clojure.spec$regex_spec_impl$reify__11725@7416e071"]
 
-(s/spec? (s/keys :req [::first-name
-                       ::last-name
-                       ::email]
-                 :opt [::phone]))
-;;=> #object[clojure.spec$map_spec_impl$reify__11497 0x294ad81a "clojure.spec$map_spec_impl$reify__11497@294ad81a"]
 
+;; What is a spec object?
+(s/spec? ::first-name)
+;;=> false
+;; I would expect that to be true...
+;; because previously I have used s/def to bind ::first-name to a spec, and
+;; I expect s/def to work as def, but it doesnÂ´t.
 
-;; s/def doesnÂ´t work as def****************************************************************
+(class ::first-name)
+;;=> clojure.lang.Keyword
+
+(s/spec? ::person)
+;;=> false
+
+(s/spec? (s/spec (s/cat :even even? :string string?)))
+;;=> #object[clojure.spec$regex_spec_impl$reify__11725 0x7416e071 "clojure.spec$regex_spec_impl$reify__11725@7416e071"]
+
+;; s/def doesn't work as def
 ;; def locates a global var with the name of a symbol
 
 (def a {})
@@ -296,8 +348,8 @@ a
 ;; We get the object a is referring to
 ;; evaluating a is the same as (deref (var a)) or the reader sugar @#'a
 
-;; ThatÂ´s why when we ask for the class of a, we get the class of the object a is referring to
-;; in this case, a clojure.lang.PersistentArrayMap
+;; That's why when we ask for the class of a, we get the class of the object a
+;; is referring to. in this case, a clojure.lang.PersistentArrayMap
 (class a)
 ;;=> clojure.lang.PersistentArrayMap
 
@@ -306,33 +358,13 @@ a
 ;; the registry is an (atom {})
 ;; ThatÂ´s why, even when a keyword is mapped to a spec using s/def,
 ;; it is still evaluated as a keyword.
-;;******************************************************************************************
-
-;; When conformance is checked on a map, it combines two things:
-;; 1- checking that the required attributes are included,
-;; 2- and checking that every registered key has a conforming value.
-
-(s/conform ::person {::first-name "Espe" ::last-name "Moreno"})
-;;=> :clojure.spec/invalid
-
-(s/explain-str ::person {::first-name "Espe" ::last-name "Moreno"})
-;;=> "val: {:hola-spec.core/first-name \"Espe\", :hola-spec.core/last-name \"Moreno\"}
-;; fails predicate: [(contains? % :hola-spec.core/email)]\r\n"
-
-(s/conform ::person {::first-name "Espe" ::last-name "Moreno" ::email 123})
-;;=> :clojure.spec/invalid
-
-(s/explain ::person {::first-name "Espe" ::last-name "Moreno" ::email 123})
-;;=> "In: [:hola-spec.core/email] val: 123 fails spec: :hola-spec.core/email at: [:hola-spec.core/email] predicate: string?\r\n"
-
-(s/conform ::person {::first-name "Espe" ::last-name "Moreno" ::email "1@2.com"})
-;;=> {:hola-spec.core/first-name "Espe",
-;;    :hola-spec.core/last-name "Moreno",
-;;    :hola-spec.core/email "1@2.com"}
+;;**************************************************************************************
 
 
-;; Also note that ALL attributes are checked via keys, not just those listed in the :req and :opt keys.
-;; Thus a bare (s/keys) is valid and will check all attributes of a map without checking which keys are required or optional.
+;; Also note that ALL attributes are checked via keys, not just those listed in the
+;; :req and :opt keys.
+;; Thus a bare (s/keys) is valid and will check all attributes of a map without
+;; checking which keys are required or optional.
 
 (s/def ::any-map (s/keys))
 ;;=> :hola-spec.core/any-map
@@ -349,6 +381,40 @@ a
 
 
 ;; keys can also specify :req-un and :opt-un for required and optional unqualified keys.
+
+
+(s/def ::port number?)
+(s/def ::host string?)
+(s/def ::id keyword?)
+(s/def ::server (s/keys* :req [::id
+                               ::host]
+                         :opt [::port]))
+;; keys* has the same syntax and semantics as keys but can be embedded inside a
+;; sequential regex structure. 
+;; conform takes a vector (or a sequential data structure) instead of a map after
+;; the spec we want conform
+
+(s/conform ::server [::id :s1 ::host "example.com" ::port 5555])
+;;=> {:hola-spec.core/id :s1, :hola-spec.core/host "example.com",
+;;:hola-spec.core/port 5555}
+
+
+;; ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;;                          MULTI-SPEC
+;; ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+;; Look over defmulti and defrecord first 
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -542,7 +608,7 @@ a
 ;; We turn on the instrumentation of the validation for functions
 (s/instrument #'fish-line)
 
-;; #'fish-line = (var fish-line)
+;; Remenber: #'fish-line = (var fish-line)
 
 (fish-line 1 2 "Red" "Blue")
 
